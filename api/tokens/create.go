@@ -1,13 +1,10 @@
-package api
+package tokens
 
 import (
 	"context"
-
-	"tokenize/api"
 )
 
-type TokenHandler struct {
-	api.BaseHandler
+type Handler struct {
 }
 
 type NewToken struct {
@@ -19,6 +16,6 @@ type NewTokenRequest struct {
 
 type NewTokenResponse struct{}
 
-func (h *TokenHandler) CreateToken(ctx context.Context, in *NewTokenRequest) (*NewTokenResponse, error) {
+func (h *Handler) CreateToken(ctx context.Context, in *NewTokenRequest) (*NewTokenResponse, error) {
 
 }

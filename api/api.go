@@ -1,3 +1,9 @@
 package api
 
-type BaseHandler struct{}
+import (
+	"tokenize/api/tokens"
+)
+
+type BaseHandler struct {
+	TokenHandler tokens.Handler
+}

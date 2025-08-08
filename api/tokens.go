@@ -3,10 +3,12 @@ package api
 import (
 	"net/http"
 
+	api "tokenize/api/tokens"
+
 	"github.com/danielgtaylor/huma/v2"
 )
 
-func (h *BaseHandler) RegisterTokensRoutes(api huma.API) {
+func (h *api.TokenHandler) RegisterTokensRoutes(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "CreateToken",
 		Summary:       "Create a new token",
