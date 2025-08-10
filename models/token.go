@@ -20,12 +20,14 @@ type CreateToken struct {
 	Metadata  map[string]any `json:"metadata"`
 }
 
+// Token is the full model of a token including the info from the BaseModel and the CreateToken
 type Token struct {
 	BaseModel
 	CreateToken
 	Token string `json:"token"`
 }
 
+// Encrypt encrypts the payload using AES-GCM
 func (t *Token) Encrypt() error {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -44,6 +46,7 @@ func (t *Token) Encrypt() error {
 	return nil
 }
 
+// Decrypt decrypts the payload using AES-GCM
 func (t *Token) Decrypt() (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -67,6 +70,7 @@ func (t *Token) Decrypt() (string, error) {
 	return string(decryptedData), nil
 }
 
+// Tokenize creates a token from the payload using SHA512_256 algorithm
 func (t *Token) Tokenize() error {
 	h := sha512.New512_256()
 	h.Write([]byte(t.Payload))
