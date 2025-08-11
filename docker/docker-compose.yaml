@@ -5,9 +5,7 @@ services:
     hostname: dynamodb
     restart: always
     volumes:
-      -  my-dynamodb-data:/home/dynamodblocal/data
+      -  ./my-dynamodb-data:/home/dynamodblocal/data
     ports:
       - 8000:8000
     command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data/"
-volumes:
-  my-dynamodb-data:

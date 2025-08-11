@@ -14,17 +14,17 @@ var (
 // CreateToken is used for creating a new token, it does not have the ID or Token fields because those are generated
 // and will be part of the Token
 type CreateToken struct {
-	Payload   string         `json:"payload"`
-	TokenType string         `json:"token_type"`
-	TTL       int64          `json:"ttl"`
-	Metadata  map[string]any `json:"metadata"`
+	Payload   string         `json:"payload" dynamodbav:"payload"`
+	TokenType string         `json:"token_type" dynamodbav:"token_type"`
+	TTL       int64          `json:"ttl" dynamodbav:"ttl"`
+	Metadata  map[string]any `json:"metadata" dynamodbav:"metadata"`
 }
 
 // Token is the full model of a token including the info from the BaseModel and the CreateToken
 type Token struct {
 	BaseModel
 	CreateToken
-	Token string `json:"token"`
+	Token string `json:"token" dynamodbav:"token"`
 }
 
 // Encrypt encrypts the payload using AES-GCM
