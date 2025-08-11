@@ -1,7 +1,9 @@
 package api
 
-import "tokenize/models"
+import (
+	"tokenize/persistence"
+)
 
 type BaseHandler struct {
-	Store map[string]models.Token
+	Store persistence.Store
 }

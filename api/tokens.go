@@ -3,11 +3,9 @@ package api
 import (
 	"context"
 	"net/http"
-	"time"
 	"tokenize/models"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/google/uuid"
 )
 
 func (h *BaseHandler) RegisterTokensRoutes(api huma.API) {
@@ -66,7 +64,7 @@ type NewTokenResponse struct {
 	}
 }
 
-func (h *BaseHandler) CreateToken(_ context.Context, in *NewTokenRequest) (*NewTokenResponse, error) {
+func (h *BaseHandler) CreateToken(ctx context.Context, in *NewTokenRequest) (*NewTokenResponse, error) {
 
 	newToken := models.Token{
 		CreateToken: in.Body.Data,
@@ -78,19 +76,13 @@ func (h *BaseHandler) CreateToken(_ context.Context, in *NewTokenRequest) (*NewT
 		return nil, err
 	}
 
-	id, err := uuid.NewV7()
+	tokenVal, err := h.Store.CreateToken(ctx, &newToken)
 	if err != nil {
 		return nil, err
 	}
 
-	newToken.Id = id
-	newToken.CreatedAt = time.Now()
-	newToken.UpdatedAt = time.Now()
-
-	h.Store[newToken.Token] = newToken
-
 	output := &NewTokenResponse{}
-	output.Body.Token = newToken.Token
+	output.Body.Token = tokenVal.Token
 
 	return output, nil
 }
@@ -105,32 +97,40 @@ type GetTokenResponse struct {
 	}
 }
 
-func (h *BaseHandler) GetEncryptedToken(_ context.Context, in *GetTokenRequest) (*GetTokenResponse, error) {
+func (h *BaseHandler) GetEncryptedToken(ctx context.Context, in *GetTokenRequest) (*GetTokenResponse, error) {
 	token := in.Token
 	if token == "" {
 		return nil, huma.Error400BadRequest("token is required")
 	}
 
-	stored := h.Store[token]
-	stored.Payload = ""
-	output := &GetTokenResponse{}
-	output.Body.Token = stored
-	return output, nil
-}
-
-func (h *BaseHandler) GetDecryptedToken(_ context.Context, in *GetTokenRequest) (*GetTokenResponse, error) {
-	token := in.Token
-	if token == "" {
-		return nil, huma.Error400BadRequest("token is required")
-	}
-
-	stored := h.Store[token]
-	payload, err := stored.Decrypt()
+	tokenVal, err := h.Store.GetToken(ctx, token)
 	if err != nil {
 		return nil, err
 	}
-	stored.Payload = payload
+
+	tokenVal.Payload = ""
 	output := &GetTokenResponse{}
-	output.Body.Token = stored
+	output.Body.Token = *tokenVal
+	return output, nil
+}
+
+func (h *BaseHandler) GetDecryptedToken(ctx context.Context, in *GetTokenRequest) (*GetTokenResponse, error) {
+	token := in.Token
+	if token == "" {
+		return nil, huma.Error400BadRequest("token is required")
+	}
+
+	tokenVal, err := h.Store.GetToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+
+	payload, err := tokenVal.Decrypt()
+	if err != nil {
+		return nil, err
+	}
+	tokenVal.Payload = payload
+	output := &GetTokenResponse{}
+	output.Body.Token = *tokenVal
 	return output, nil
 }
