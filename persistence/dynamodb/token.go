@@ -3,6 +3,7 @@ package dynamodb
 import (
 	"context"
 	"time"
+
 	"tokenize/models"
 
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -60,4 +61,20 @@ func (d *DynamoStore) CreateToken(ctx context.Context, token *models.Token) (*mo
 	}
 
 	return token, nil
+}
+
+// func (d *DynamoStore) UpdateToken(ctx context.Context, token *models.Token) (*models.Token, error) {}
+func (d *DynamoStore) DeleteToken(ctx context.Context, token *models.Token) error {
+	awsTokenVal, err := attributevalue.Marshal(token)
+	if err != nil {
+		return err
+	}
+	_, err = d.Client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: TokenTableName,
+		Key: map[string]types.AttributeValue{
+			"token": awsTokenVal,
+		},
+	})
+
+	return err
 }

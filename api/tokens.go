@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+
 	"tokenize/models"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -49,6 +50,20 @@ func (h *BaseHandler) RegisterTokensRoutes(api huma.API) {
 			http.StatusNotFound,
 		},
 	}, h.GetDecryptedToken)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "DeleteToken",
+		Summary:       "Delete a token",
+		Method:        http.MethodDelete,
+		Path:          "/token/{token}",
+		DefaultStatus: http.StatusNoContent,
+		Errors: []int{
+			http.StatusUnauthorized,
+			http.StatusForbidden,
+			http.StatusBadRequest,
+			http.StatusNotFound,
+		},
+	}, h.DeleteToken)
 
 }
 
@@ -129,8 +144,24 @@ func (h *BaseHandler) GetDecryptedToken(ctx context.Context, in *GetTokenRequest
 	if err != nil {
 		return nil, err
 	}
+
 	tokenVal.Payload = payload
 	output := &GetTokenResponse{}
 	output.Body.Token = *tokenVal
 	return output, nil
+}
+
+func (h *BaseHandler) DeleteToken(ctx context.Context, in *GetTokenRequest) (*struct{}, error) {
+	token := in.Token
+
+	tokenVal, err := h.Store.GetToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+
+	err = h.Store.DeleteToken(ctx, tokenVal)
+	if err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
