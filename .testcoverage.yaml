@@ -6,4 +6,5 @@ threshold:
 
 exclude:
   paths:
-    - \docker
+    - /docker
+    - /cmd/service
