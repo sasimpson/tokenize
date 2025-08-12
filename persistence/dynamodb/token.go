@@ -24,6 +24,9 @@ func (d *DynamoStore) GetToken(ctx context.Context, token string) (*models.Token
 			"token": awsTokenVal,
 		},
 	})
+	if dynamoItem == nil || dynamoItem.Item == nil {
+		return nil, models.ErrTokenNotFound
+	}
 	if err != nil {
 		return nil, err
 	}

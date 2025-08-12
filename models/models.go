@@ -1,9 +1,14 @@
 package models
 
 import (
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+)
+
+var (
+	ErrTokenNotFound = errors.New("token not found")
 )
 
 type BaseModel struct {
