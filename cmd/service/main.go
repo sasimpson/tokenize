@@ -30,7 +30,7 @@ func main() {
 
 	handlers := &api.BaseHandler{
 		Store: &dynamodb.DynamoStore{
-			Client: db,
+			Api: db,
 		},
 	}
 

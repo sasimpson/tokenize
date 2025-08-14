@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-func CreateTable(ctx context.Context, client *dynamodb.Client) error {
+func CreateTable(ctx context.Context, client Api) error {
 	_, err := client.CreateTable(ctx, &dynamodb.CreateTableInput{
 		TableName: TokenTableName,
 		AttributeDefinitions: []types.AttributeDefinition{
@@ -19,6 +19,7 @@ func CreateTable(ctx context.Context, client *dynamodb.Client) error {
 		},
 		KeySchema: []types.KeySchemaElement{
 			{
+
 				AttributeName: aws.String("token"),
 				KeyType:       types.KeyTypeHash,
 			},

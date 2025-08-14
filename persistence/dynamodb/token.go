@@ -18,17 +18,17 @@ func (d *DynamoStore) GetToken(ctx context.Context, token string) (*models.Token
 		return nil, err
 	}
 
-	dynamoItem, err := d.Client.GetItem(ctx, &dynamodb.GetItemInput{
+	dynamoItem, err := d.Api.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: TokenTableName,
 		Key: map[string]types.AttributeValue{
 			"token": awsTokenVal,
 		},
 	})
-	if dynamoItem == nil || dynamoItem.Item == nil {
-		return nil, models.ErrTokenNotFound
-	}
 	if err != nil {
 		return nil, err
+	}
+	if dynamoItem == nil || dynamoItem.Item == nil {
+		return nil, models.ErrTokenNotFound
 	}
 
 	tokenPayload := &models.Token{}
@@ -55,7 +55,7 @@ func (d *DynamoStore) CreateToken(ctx context.Context, token *models.Token) (*mo
 		return nil, err
 	}
 
-	_, err = d.Client.PutItem(ctx, &dynamodb.PutItemInput{
+	_, err = d.Api.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: TokenTableName,
 		Item:      dynamoItem,
 	})
@@ -67,12 +67,13 @@ func (d *DynamoStore) CreateToken(ctx context.Context, token *models.Token) (*mo
 }
 
 // func (d *DynamoStore) UpdateToken(ctx context.Context, token *models.Token) (*models.Token, error) {}
+
 func (d *DynamoStore) DeleteToken(ctx context.Context, token *models.Token) error {
 	awsTokenVal, err := attributevalue.Marshal(token)
 	if err != nil {
 		return err
 	}
-	_, err = d.Client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+	_, err = d.Api.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName: TokenTableName,
 		Key: map[string]types.AttributeValue{
 			"token": awsTokenVal,
