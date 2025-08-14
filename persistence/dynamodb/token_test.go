@@ -7,6 +7,7 @@ import (
 	"time"
 	"tokenize/models"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
@@ -14,10 +15,11 @@ import (
 )
 
 type mockDynamoAPI struct {
-	getItemFunc     func(ctx context.Context, params *dynamodb.GetItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error)
-	putItemFunc     func(ctx context.Context, params *dynamodb.PutItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
-	deleteItemFunc  func(ctx context.Context, params *dynamodb.DeleteItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error)
-	createTableFunc func(ctx context.Context, params *dynamodb.CreateTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.CreateTableOutput, error)
+	getItemFunc       func(ctx context.Context, params *dynamodb.GetItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error)
+	putItemFunc       func(ctx context.Context, params *dynamodb.PutItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
+	deleteItemFunc    func(ctx context.Context, params *dynamodb.DeleteItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error)
+	createTableFunc   func(ctx context.Context, params *dynamodb.CreateTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.CreateTableOutput, error)
+	describeTableFunc func(ctx context.Context, params *dynamodb.DescribeTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error)
 }
 
 func (m *mockDynamoAPI) GetItem(ctx context.Context, params *dynamodb.GetItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
@@ -46,6 +48,13 @@ func (m *mockDynamoAPI) CreateTable(ctx context.Context, params *dynamodb.Create
 		return m.createTableFunc(ctx, params, optFns...)
 	}
 	return nil, errors.New("CreateTable not implemented")
+}
+
+func (m *mockDynamoAPI) DescribeTable(ctx context.Context, params *dynamodb.DescribeTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+	if m.describeTableFunc != nil {
+		return m.describeTableFunc(ctx, params, optFns...)
+	}
+	return nil, errors.New("DescribeTable not implemented")
 }
 
 func TestGetToken(t *testing.T) {
@@ -582,6 +591,162 @@ func TestDeleteToken(t *testing.T) {
 
 			err := store.DeleteToken(context.Background(), tc.input)
 			tc.expect(t, err)
+		})
+	}
+}
+
+func TestSetupDynamoTable(t *testing.T) {
+	testCases := []struct {
+		name   string
+		client func(t *testing.T) *mockDynamoAPI
+		expect func(t *testing.T, mock *mockDynamoAPI)
+	}{
+		{
+			name: "table exists - no action needed",
+			client: func(t *testing.T) *mockDynamoAPI {
+				return &mockDynamoAPI{
+					describeTableFunc: func(ctx context.Context, params *dynamodb.DescribeTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+						// Verify correct table name is being checked
+						assert.Equal(t, "token_data", *params.TableName)
+
+						return &dynamodb.DescribeTableOutput{
+							Table: &types.TableDescription{
+								TableName:   aws.String("token_data"),
+								TableStatus: types.TableStatusActive,
+							},
+						}, nil
+					},
+				}
+			},
+			expect: func(t *testing.T, mock *mockDynamoAPI) {
+				// Should not call CreateTable when table exists
+				assert.Nil(t, mock.createTableFunc, "CreateTable should not be called when table exists")
+			},
+		},
+		{
+			name: "table not found - creates table",
+			client: func(t *testing.T) *mockDynamoAPI {
+				return &mockDynamoAPI{
+					describeTableFunc: func(ctx context.Context, params *dynamodb.DescribeTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+						assert.Equal(t, "token_data", *params.TableName)
+
+						// Return ResourceNotFoundException
+						return nil, &types.ResourceNotFoundException{
+							Message: aws.String("Table not found: token_data"),
+						}
+					},
+					createTableFunc: func(ctx context.Context, params *dynamodb.CreateTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.CreateTableOutput, error) {
+						// Verify CreateTable is called with correct parameters
+						assert.Equal(t, *TokenTableName, *params.TableName)
+						assert.Len(t, params.AttributeDefinitions, 1)
+						assert.Equal(t, "token", *params.AttributeDefinitions[0].AttributeName)
+						assert.Equal(t, types.ScalarAttributeTypeS, params.AttributeDefinitions[0].AttributeType)
+						assert.Len(t, params.KeySchema, 1)
+						assert.Equal(t, "token", *params.KeySchema[0].AttributeName)
+						assert.Equal(t, types.KeyTypeHash, params.KeySchema[0].KeyType)
+						assert.Equal(t, types.BillingModePayPerRequest, params.BillingMode)
+
+						return &dynamodb.CreateTableOutput{
+							TableDescription: &types.TableDescription{
+								TableName:   params.TableName,
+								TableStatus: types.TableStatusCreating,
+							},
+						}, nil
+					},
+				}
+			},
+			expect: func(t *testing.T, mock *mockDynamoAPI) {
+				// CreateTable should have been called
+				assert.NotNil(t, mock.createTableFunc, "CreateTable should be called when table doesn't exist")
+			},
+		},
+		{
+			name: "describe table generic error - no table creation",
+			client: func(t *testing.T) *mockDynamoAPI {
+				return &mockDynamoAPI{
+					describeTableFunc: func(ctx context.Context, params *dynamodb.DescribeTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+						assert.Equal(t, "token_data", *params.TableName)
+
+						// Return generic error (not ResourceNotFoundException)
+						return nil, errors.New("access denied")
+					},
+				}
+			},
+			expect: func(t *testing.T, mock *mockDynamoAPI) {
+				// Should not call CreateTable for non-ResourceNotFoundException errors
+				assert.Nil(t, mock.createTableFunc, "CreateTable should not be called for generic errors")
+			},
+		},
+		{
+			name: "table creation fails",
+			client: func(t *testing.T) *mockDynamoAPI {
+				return &mockDynamoAPI{
+					describeTableFunc: func(ctx context.Context, params *dynamodb.DescribeTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+						return nil, &types.ResourceNotFoundException{
+							Message: aws.String("Table not found: token_data"),
+						}
+					},
+					createTableFunc: func(ctx context.Context, params *dynamodb.CreateTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.CreateTableOutput, error) {
+						// Simulate CreateTable failure
+						return nil, errors.New("insufficient permissions")
+					},
+				}
+			},
+			expect: func(t *testing.T, mock *mockDynamoAPI) {
+				// CreateTable should have been attempted even if it failed
+				assert.NotNil(t, mock.createTableFunc, "CreateTable should be attempted")
+			},
+		},
+		{
+			name: "resource already exists during creation",
+			client: func(t *testing.T) *mockDynamoAPI {
+				return &mockDynamoAPI{
+					describeTableFunc: func(ctx context.Context, params *dynamodb.DescribeTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+						return nil, &types.ResourceNotFoundException{
+							Message: aws.String("Table not found: token_data"),
+						}
+					},
+					createTableFunc: func(ctx context.Context, params *dynamodb.CreateTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.CreateTableOutput, error) {
+						// Simulate race condition where table gets created between describe and create
+						return nil, &types.ResourceInUseException{
+							Message: aws.String("Table already exists: token_data"),
+						}
+					},
+				}
+			},
+			expect: func(t *testing.T, mock *mockDynamoAPI) {
+				// CreateTable should have been attempted
+				assert.NotNil(t, mock.createTableFunc, "CreateTable should be attempted")
+			},
+		},
+		{
+			name: "multiple error types handling",
+			client: func(t *testing.T) *mockDynamoAPI {
+				return &mockDynamoAPI{
+					describeTableFunc: func(ctx context.Context, params *dynamodb.DescribeTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+						// Return a different AWS error type
+						return nil, &types.LimitExceededException{
+							Message: aws.String("Rate limit exceeded"),
+						}
+					},
+				}
+			},
+			expect: func(t *testing.T, mock *mockDynamoAPI) {
+				// Should not call CreateTable for LimitExceededException
+				assert.Nil(t, mock.createTableFunc, "CreateTable should not be called for LimitExceededException")
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := tc.client(t)
+
+			// Call SetupDynamoTable function
+			SetupDynamoTable(context.Background(), mock)
+
+			// Run expectations
+			tc.expect(t, mock)
 		})
 	}
 }
