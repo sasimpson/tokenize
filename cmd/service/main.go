@@ -3,8 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -33,17 +32,21 @@ func buildServer() *http.Server {
 }
 
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	server := buildServer()
 
 	shutdownChan := make(chan bool, 1)
 
-	fmt.Println("starting service on", server.Addr)
+	slog.Info("starting service", "addr", server.Addr)
 	go func() {
 		if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("http server error: %v\n", err)
+			slog.Error("http server error", "error", err)
+			os.Exit(1)
 		}
 		time.Sleep(1 * time.Millisecond)
-		log.Println("stopped serving new connections")
+		slog.Info("stopped serving new connections")
 		shutdownChan <- true
 	}()
 
@@ -55,9 +58,10 @@ func main() {
 	defer shutdownRelease()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("http shutdown error: %v\n", err)
+		slog.Error("http shutdown error", "error", err)
+		os.Exit(1)
 	}
 
 	<-shutdownChan
-	log.Println("graceful shutdown complete")
+	slog.Info("graceful shutdown complete")
 }
